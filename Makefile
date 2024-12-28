@@ -1,5 +1,5 @@
 # project name
-TARGET   = html_server
+TARGET   = http_server
 
 # compiler and compiler flags
 CC       = gcc

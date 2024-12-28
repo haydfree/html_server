@@ -1,1 +1,1 @@
-implementing simple html server for backend api's
+implementing simple http server for api's in C89
