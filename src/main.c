@@ -19,57 +19,56 @@ enum AddressFamily { IPV4 = AF_INET, IPV6 = AF_INET6 };
 enum SocketType { TCP = SOCK_STREAM, UDP = SOCK_DGRAM };
 enum SocketProtocol {TCP_PROTOCOL = IPPROTO_TCP, UDP_PROTOCOL = IPPROTO_UDP };
 enum AddressOption { ANY = INADDR_ANY, LOOPBACK = INADDR_LOOPBACK };
+enum ErrorType {SVR_ADDR_INIT, SVR_SOCK_INIT, CLI_ADDR_INIT, CLI_SOCK_INIT, BIND, LISTEN, RECV };
+const char *ErrorTypeStr[7] = {"SVR_ADDR_INIT", "SVR_SOCK_INIT", "CLI_ADDR_INIT", 
+                            "CLI_SOCK_INIT", "BIND", "LISTEN", "RECV" };
 
-void initAddresses() {
+void checkForErrors(int data, enum ErrorType type) {
+    if (data != -1) { return; }
+    printf("Error at: %s \n", ErrorTypeStr[type]);
+}
+
+void checkForNull(void *data, enum ErrorType type) {
+    if (data != NULL) { return; }
+    checkForErrors(-1, type);
+}
+
+void initServerAddress(int serverPort) {
     p_serverAddress = malloc(sizeof(Address));
-    if (p_serverAddress == NULL) {
-        perror("Server address is null. \n");
-        exit(1);
-    }
-
+    checkForNull(p_serverAddress, SVR_ADDR_INIT);
     memset(p_serverAddress, 0, sizeof(Address));
 
-    p_clientAddress = malloc(sizeof(Address));
-    if (p_clientAddress == NULL) {
-        perror("Client address is null. \n");
-        exit(1);
-    }
-
-    memset(p_clientAddress , 0, sizeof(Address));
+    serverPort = htons(serverPort);
+    p_serverAddress->sin_family = IPV4;
+    p_serverAddress->sin_addr.s_addr = ANY;
+    p_serverAddress->sin_port = serverPort;
 }
 
 int main() {
     serverSocket = socket(IPV4, TCP, TCP_PROTOCOL); 
-    if (serverSocket == ERROR) {
-        perror("Socket error");  
-        exit(1);
-    }
-
-    int port = htons(PORT);
-
-    initAddresses();
-    p_serverAddress->sin_family = IPV4;
-    p_serverAddress->sin_addr.s_addr = ANY;
-    p_serverAddress->sin_port = port;
+    checkForErrors(serverSocket, SVR_SOCK_INIT);
+    
+    initServerAddress(PORT);
 
     int bindRes = bind(serverSocket, (struct sockaddr *) p_serverAddress, sizeof(Address));
-    if (bindRes == ERROR) {
-        perror("Bind error");
-        exit(1);
-    }
-
-    printf("Server initialized on %s:%d\n", inet_ntoa(p_serverAddress->sin_addr), ntohs(p_serverAddress->sin_port));
+    checkForErrors(bindRes, BIND);
 
     int listenRes = listen(serverSocket, BACKLOG_SIZE);
-    if (listenRes == ERROR) {
-        perror("Listen error");
-        exit(1);
-    }
+    checkForErrors(listenRes, LISTEN);
 
-    int clientSocket = accept(serverSocket, NULL, NULL);
-    if (clientSocket == ERROR) {
-        perror("Accept error");
-        exit(1);
+    while (1) {
+        int clientSocket = accept(serverSocket, NULL, NULL);
+        checkForErrors(clientSocket, CLI_SOCK_INIT);
+
+        char buffer[BUFFER_SIZE];
+        int bytesReceived = recv(clientSocket, buffer, sizeof(buffer) - 1, 0);
+        checkForErrors(bytesReceived, RECV);
+        buffer[bytesReceived] = '\0';
+
+        const char *httpResponse = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nHello, world!";
+        send(clientSocket, httpResponse, strlen(httpResponse), 0);
+
+        close(clientSocket);
     }
 
     close(serverSocket); 
