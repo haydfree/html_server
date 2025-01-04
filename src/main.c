@@ -50,7 +50,7 @@ void checkForErrors(int code, int *data, char *file, const char *func, int line,
     exit(code);
 }
 
-void checkForNull(int code, int *data, char *file, const char *func, int line, char *msg) {
+void checkForNull(int code, void *data, char *file, const char *func, int line, char *msg) {
     if (data != NULL) { return; }
     checkForErrors(code, data, file, func, line, msg);
 }
@@ -77,12 +77,27 @@ HttpRequest *buildRequest(char *method, char *path, HttpHeader *headers, char *b
 
     return req;
 }
-void parseRequest();
+
+void parseRequest(char *requestStr) { 
+    char *method, *path, *body;
+    HttpHeader *headers;
+
+    if (strncmp(requestStr, "GET", 3) == 0) { printf("get request \n"); method = "GET"; } 
+    if (strncmp(requestStr, "POST", 4) == 0) { printf("post request \n"); method = "POST"; } 
+    if (strncmp(requestStr, "PUT", 3) == 0) { printf("put request \n"); method = "PUT"; } 
+    if (strncmp(requestStr, "DELETE", 6) == 0) { printf("delete request \n"); method = "DELETE"; } 
+
+    
+}
+
 void sendRequest();
 
 void buildResponse();
 void parseResponse();
 void receiveResponse();
+
+void handleRoute();
+void handleRequest();
 
 int main() {
     serverSocket = socket(IPV4, TCP, TCP_PROTOCOL); 
@@ -108,8 +123,11 @@ int main() {
 
         buffer[bytesReceived] = '\0';
 
+        char blankBuf[256];
         printf("request: %s\n", buffer);
-
+        sscanf(buffer, "%255s", blankBuf);
+        printf("blankBuf: %s", blankBuf);
+        parseRequest(buffer);
         const char *httpResponse = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nHello, world!";
         send(clientSocket, httpResponse, strlen(httpResponse), 0);
 
