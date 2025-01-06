@@ -5,6 +5,7 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <pthread.h>
+#include "json_lib.h"
 
 #define PORT 8080
 #define ERROR -1
@@ -29,13 +30,14 @@ typedef struct HttpHeader {
 typedef struct HttpRequest {
     char *method;
     char *path;
-    HttpHeader *headers;
+    HttpHeader **headers;
     char *body;
+    int headersSize;
 } HttpRequest;
 
 typedef struct HttpResponse {
     int statusCode;
-    HttpHeader *headers;
+    HttpHeader **headers;
     char *body;
 } HttpResponse;
 
@@ -66,7 +68,7 @@ void initServerAddress(int serverPort) {
     p_serverAddress->sin_port = serverPort;
 }
 
-HttpRequest *buildRequest(char *method, char *path, HttpHeader *headers, char *body) {
+HttpRequest *buildRequest(char *method, char *path, HttpHeader **headers, char *body) {
     HttpRequest *req = malloc(sizeof(HttpRequest));
     checkForNull(-1, req, __FILE__, __func__, __LINE__, "request is null");
 
@@ -78,16 +80,83 @@ HttpRequest *buildRequest(char *method, char *path, HttpHeader *headers, char *b
     return req;
 }
 
-void parseRequest(char *requestStr) { 
+HttpRequest *parseRequest(char *requestStr) { 
     char *method, *path, *body;
-    HttpHeader *headers;
+    HttpHeader **headers = malloc(4 * sizeof(HttpHeader *));
+    checkForNull(-1, headers, __FILE__, __func__, __LINE__, "headers array");
 
-    if (strncmp(requestStr, "GET", 3) == 0) { printf("get request \n"); method = "GET"; } 
-    if (strncmp(requestStr, "POST", 4) == 0) { printf("post request \n"); method = "POST"; } 
-    if (strncmp(requestStr, "PUT", 3) == 0) { printf("put request \n"); method = "PUT"; } 
-    if (strncmp(requestStr, "DELETE", 6) == 0) { printf("delete request \n"); method = "DELETE"; } 
+    /* method */
+    if (strncmp(requestStr, "GET", 3) == 0) { method = "GET"; } 
+    if (strncmp(requestStr, "POST", 4) == 0) { method = "POST"; } 
+    if (strncmp(requestStr, "PUT", 3) == 0) { method = "PUT"; } 
+    if (strncmp(requestStr, "DELETE", 6) == 0) { method = "DELETE"; } 
 
-    
+    requestStr = requestStr + strlen(method);
+
+    /* headers */
+    int idx = 0;
+    while (strncmp(requestStr, "\r\n\r\n", 4) != 0) {
+        if (strncmp(requestStr, "Host:", 5) == 0) {
+            headers[idx] = malloc(sizeof(HttpHeader));
+            checkForNull(-1, headers[idx], __FILE__, __func__, __LINE__, "headers element");
+            headers[idx]->name = "Host";
+
+            char *value = requestStr + 5;
+            char *end = strstr(value, "\r\n");
+            if (end) { *end = '\0'; }
+            headers[idx]->value = strndup(value, 5);
+            idx++;
+        }
+
+        if (strncmp(requestStr, "Content-Type:", 13) == 0) {
+            headers[idx] = malloc(sizeof(HttpHeader));
+            checkForNull(-1, headers[idx], __FILE__, __func__, __LINE__, "headers element");
+            headers[idx]->name = "Content-Type";
+
+            char *value = requestStr + 13;
+            char *end = strstr(value, "\r\n");
+            if (end) { *end = '\0'; }
+            headers[idx]->value = strndup(value, 13);
+            idx++;
+        }
+        requestStr++;
+    }
+
+    /* path */
+    char *pathStart = requestStr;
+    while (*requestStr && *requestStr != '\n' && *requestStr != '\r' && *requestStr != ' ') {
+        requestStr++; 
+    }
+    int pathLength = requestStr - pathStart;
+
+    if (pathLength > 0) { path = strndup(requestStr, pathLength); }
+    else { path = "/"; }
+
+    requestStr = requestStr + strlen(path);
+
+    /* body */
+    char *bodyStart = strstr(requestStr, "\r\n\r\n");
+    if (bodyStart) {
+        body = requestStr;
+        requestStr += 4;
+    } else {
+        body = " ";
+    }
+
+    HttpRequest *req = buildRequest(method, path, headers, body); 
+    req->headersSize = idx + 1; 
+    return req;
+}
+
+void printRequest(HttpRequest *req) {
+    printf("METHOD: %s \n", req->method);
+    printf("PATH: %s \n", req->path);
+    printf("BODY: %s \n", req->body);
+
+    int i;
+    for (i = 0; i < req->headersSize; i++) {
+        printf("HEADER [%d]: name: %s, value: %s \n", i, req->headers[i]->name, req->headers[i]->value); 
+    }
 }
 
 void sendRequest();
@@ -104,6 +173,10 @@ int main() {
     checkForErrors(-1, &serverSocket, __FILE__, __func__, __LINE__, "serverSocket");
 
     initServerAddress(PORT);
+
+    /* socket option to reuse port even if still in use */
+    int opt = 1;
+    setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
     int bindRes = bind(serverSocket, (struct sockaddr *) p_serverAddress, sizeof(Address));
     checkForErrors(-1, &bindRes, __FILE__, __func__, __LINE__, "bindres");
@@ -124,10 +197,9 @@ int main() {
         buffer[bytesReceived] = '\0';
 
         char blankBuf[256];
-        printf("request: %s\n", buffer);
         sscanf(buffer, "%255s", blankBuf);
-        printf("blankBuf: %s", blankBuf);
-        parseRequest(buffer);
+        HttpRequest *req = parseRequest(buffer);
+        printRequest(req);
         const char *httpResponse = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nHello, world!";
         send(clientSocket, httpResponse, strlen(httpResponse), 0);
 

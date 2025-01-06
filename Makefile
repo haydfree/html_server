@@ -3,11 +3,11 @@ TARGET   = http_server
 
 # compiler and compiler flags
 CC       = gcc
-CFLAGS   = -std=c89 -Wall -Wextra -I. -g
+CFLAGS   = -std=c89 -Wall -Wextra -I. -Ijson_lib/inc -g
 
 # linker and linker flags
 LINKER   = gcc
-LFLAGS   = -Wall -I. -lm -g
+LFLAGS   = -Wall -I. -Ijson_lib/inc -lm -g
 
 SRCDIR   = src
 INCDIR   = inc
