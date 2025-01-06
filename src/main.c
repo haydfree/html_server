@@ -101,11 +101,15 @@ HttpRequest *parseRequest(char *requestStr) {
             checkForNull(-1, headers[idx], __FILE__, __func__, __LINE__, "headers element");
             headers[idx]->name = "Host";
 
-            char *value = requestStr + 5;
-            char *end = strstr(value, "\r\n");
+            requestStr += 5;
+            while (*requestStr == ' ') { requestStr++; }
+            char *requestCopy = requestStr;
+            char *end = strstr(requestCopy, "\r\n");
             if (end) { *end = '\0'; }
-            headers[idx]->value = strndup(value, 5);
+            int length = strlen(requestCopy);
+            headers[idx]->value = strndup(requestCopy, length);
             idx++;
+            requestStr += length; 
         }
 
         if (strncmp(requestStr, "Content-Type:", 13) == 0) {
@@ -113,11 +117,14 @@ HttpRequest *parseRequest(char *requestStr) {
             checkForNull(-1, headers[idx], __FILE__, __func__, __LINE__, "headers element");
             headers[idx]->name = "Content-Type";
 
-            char *value = requestStr + 13;
-            char *end = strstr(value, "\r\n");
+            requestStr += 13;
+            char *requestCopy = requestStr;
+            char *end = strstr(requestCopy, "\r\n");
             if (end) { *end = '\0'; }
-            headers[idx]->value = strndup(value, 13);
+            int length = strlen(requestCopy);
+            headers[idx]->value = strndup(requestCopy, length);
             idx++;
+            requestStr += length; 
         }
         requestStr++;
     }
@@ -144,7 +151,7 @@ HttpRequest *parseRequest(char *requestStr) {
     }
 
     HttpRequest *req = buildRequest(method, path, headers, body); 
-    req->headersSize = idx + 1; 
+    req->headersSize = idx; 
     return req;
 }
 
