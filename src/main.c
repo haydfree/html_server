@@ -166,7 +166,13 @@ void printRequest(HttpRequest *req) {
     }
 }
 
-void sendRequest();
+void sendRequest(void *clientSocket, char *req) {
+    int length = 0;
+    while (req != '\0') {
+        length++;
+    }
+    send(clientSocket, req, length, 0);
+}
 
 void buildResponse();
 void parseResponse();
@@ -202,7 +208,6 @@ int main() {
         checkForErrors(-1, &bytesReceived, __FILE__, __func__, __LINE__, "bytesReceived");
 
         buffer[bytesReceived] = '\0';
-
         char blankBuf[256];
         sscanf(buffer, "%255s", blankBuf);
         HttpRequest *req = parseRequest(buffer);
