@@ -168,7 +168,7 @@ void printRequest(HttpRequest *req) {
 
 void sendRequest(void *clientSocket, char *req) {
     int length = 0;
-    while (req != '\0') {
+    while (req[length] != 0) {
         length++;
     }
     send(clientSocket, req, length, 0);
